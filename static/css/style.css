@@ -1,0 +1,306 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  background: #f0f2f0;
+  color: #111;
+  min-height: 100vh;
+}
+
+.app {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.camera-panel {
+  flex: 1 1 480px;
+}
+
+.camera-panel h1 {
+  font-size: 1.25rem;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.side-panel {
+  flex: 0 1 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.video-wrap {
+  position: relative;
+  background: #111;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+}
+
+#video,
+#overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#overlay {
+  pointer-events: none;
+  z-index: 2;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: #5cb85c;
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button#btnStop {
+  background: #888;
+}
+
+.chart-panel {
+  flex: 0 1 380px;
+}
+
+.chart-card {
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 12px;
+  padding: 20px 20px 16px;
+  min-height: 420px;
+}
+
+.chart-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.chart-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#donut {
+  display: block;
+  margin: 0 auto;
+}
+
+.legend {
+  list-style: none;
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.legend .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.primary-label {
+  margin-top: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2e6b4e;
+  text-align: center;
+}
+
+.capture-preview {
+  margin-top: 12px;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.capture-preview.hidden {
+  display: none;
+}
+
+.chart-card.locked {
+  box-shadow: 0 0 0 2px #5cb85c;
+}
+
+.ai-card {
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.ai-card.ai-active {
+  border-color: #5cb85c;
+}
+
+.ai-card .chart-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e8e8e8;
+  color: #555;
+}
+
+.badge-ok {
+  background: #d4edda;
+  color: #2e6b4e;
+}
+
+.badge-warn {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.ai-summary {
+  font-size: 0.9rem;
+  color: #333;
+  margin: 8px 0 14px;
+  line-height: 1.45;
+}
+
+.ai-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ai-box {
+  background: #f7f9f7;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+}
+
+.ai-box h3 {
+  font-size: 0.75rem;
+  color: #666;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.ai-value {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.ai-detail {
+  font-size: 0.78rem;
+  color: #555;
+  line-height: 1.35;
+}
+
+.ai-box.level-clean {
+  border-color: #5cb85c;
+  background: #f0faf0;
+}
+
+.ai-box.level-low {
+  border-color: #f0ad4e;
+  background: #fffbf0;
+}
+
+.ai-box.level-high {
+  border-color: #d9534f;
+  background: #fff5f5;
+}
+
+.ai-box.recyclable-yes {
+  border-color: #5cb85c;
+}
+
+.ai-box.recyclable-no {
+  border-color: #d9534f;
+}
+
+.disposal-section h3 {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  color: #2e6b4e;
+}
+
+.disposal-list {
+  margin-left: 1.2rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #222;
+}
+
+.disposal-list li {
+  margin-bottom: 6px;
+}
+
+.warnings-list {
+  list-style: none;
+  margin-top: 12px;
+  font-size: 0.82rem;
+}
+
+.warnings-list li {
+  padding: 8px 10px;
+  background: #fff8e6;
+  border-left: 3px solid #f0ad4e;
+  margin-bottom: 6px;
+  border-radius: 0 6px 6px 0;
+}
+
+.warnings-list.hidden {
+  display: none;
+}

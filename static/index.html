@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reco — 재질·재활용 AI 분석</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <section class="camera-panel">
+      <h1>분리수거 AI 분석</h1>
+      <p class="subtitle">Gemini Vision · 오염도 · 재활용 · 맞춤 분리배출</p>
+      <div class="video-wrap">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <p id="status" class="status">카메라 시작 중…</p>
+      <div class="actions">
+        <button id="btnStart" type="button">카메라 시작</button>
+        <button id="btnStop" type="button" disabled>정지</button>
+      </div>
+    </section>
+
+    <section class="side-panel">
+      <div class="chart-card" id="chartCard">
+        <h2 class="chart-title">재질 분석</h2>
+        <div class="chart-body">
+          <canvas id="donut" width="280" height="240"></canvas>
+          <ul class="legend" id="legend"></ul>
+        </div>
+        <p id="primaryLabel" class="primary-label">쓰레기 종류가 여기 표시됩니다</p>
+      </div>
+
+      <div class="ai-card" id="aiCard">
+        <h2 class="chart-title">AI 분석 <span class="badge" id="aiBadge">대기</span></h2>
+        <p id="aiSummary" class="ai-summary">사진을 비추면 Gemini가 분석합니다.</p>
+
+        <div class="ai-grid">
+          <div class="ai-box" id="contaminationBox">
+            <h3>오염도</h3>
+            <p class="ai-value" id="contaminationLevel">—</p>
+            <p class="ai-detail" id="contaminationDetail"></p>
+          </div>
+          <div class="ai-box" id="recyclableBox">
+            <h3>재활용</h3>
+            <p class="ai-value" id="recyclableLabel">—</p>
+            <p class="ai-detail" id="recyclableReason"></p>
+          </div>
+        </div>
+
+        <div class="disposal-section">
+          <h3>맞춤 분리배출 방법</h3>
+          <ol id="disposalSteps" class="disposal-list"></ol>
+        </div>
+        <ul id="warnings" class="warnings-list"></ul>
+        <img id="capturePreview" class="capture-preview hidden" alt="캡처" />
+      </div>
+    </section>
+  </div>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
