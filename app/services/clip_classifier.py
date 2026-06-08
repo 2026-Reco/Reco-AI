@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -24,6 +24,7 @@ _PROMPT_TO_CATEGORY: List[int] = []
 
 def _load_clip(device: str) -> None:
     global _CLIP_MODEL, _CLIP_PROCESSOR, _TEXT_EMBEDS, _PROMPT_TO_CATEGORY
+
     if _CLIP_MODEL is not None:
         return
 
@@ -36,18 +37,25 @@ def _load_clip(device: str) -> None:
 
     prompts: List[str] = []
     mapping: List[int] = []
+
     for ci, cat in enumerate(WASTE_CATEGORIES):
         for p in cat.prompts:
             prompts.append(p)
             mapping.append(ci)
 
     _PROMPT_TO_CATEGORY = mapping
+
     tokens = _CLIP_PROCESSOR(text=prompts, return_tensors="pt", padding=True)
     tokens = {k: v.to(device) for k, v in tokens.items()}
 
     with torch.no_grad():
         text_features = _CLIP_MODEL.get_text_features(**tokens)
+
+        if hasattr(text_features, "pooler_output"):
+            text_features = text_features.pooler_output
+
         text_features = F.normalize(text_features, dim=-1)
+
     _TEXT_EMBEDS = text_features
 
 
@@ -67,19 +75,25 @@ def predict_clip(
 
     rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
     pil = Image.fromarray(rgb)
+
     inputs = _CLIP_PROCESSOR(images=pil, return_tensors="pt")
     inputs = {k: v.to(dev) for k, v in inputs.items()}
 
     with torch.no_grad():
         img_feat = _CLIP_MODEL.get_image_features(**inputs)
+
+        if hasattr(img_feat, "pooler_output"):
+            img_feat = img_feat.pooler_output
+
         img_feat = F.normalize(img_feat, dim=-1)
         sims = (img_feat @ _TEXT_EMBEDS.T)[0]
         probs = F.softmax(sims * 100.0, dim=0).cpu().numpy()
 
-    # 프롬프트별 확률 → 카테고리별 합산
     cat_scores = np.zeros(len(WASTE_CATEGORIES), dtype=np.float64)
+
     for pi, ci in enumerate(_PROMPT_TO_CATEGORY):
         cat_scores[ci] += probs[pi]
+
     cat_scores /= cat_scores.sum() + 1e-9
 
     best_ci = int(np.argmax(cat_scores))
@@ -88,8 +102,10 @@ def predict_clip(
 
     idx = material_index()
     material_dist = np.zeros(len(MATERIAL_LABELS), dtype=np.float64)
+
     for ci, cat in enumerate(WASTE_CATEGORIES):
         material_dist[idx[cat.material]] += cat_scores[ci]
+
     material_dist /= material_dist.sum() + 1e-9
 
     return material_dist, best_cat.type_id, best_cat.name_ko, confidence
