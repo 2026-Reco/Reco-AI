@@ -13,7 +13,7 @@ from app.schemas.material import (
     MaterialRatio,
     ObjectDetection,
 )
-from app.schemas.gemini_analysis import GeminiAnalysisResult
+from app.schemas.gemini_analysis import GeminiAnalysisResult, MaterialComponent
 from app.services.chart_generator import chart_to_base64, save_donut_chart
 from app.services.detection_analysis import DetectionAnalysisService, LabeledDetection
 from app.services.gemini_vision import GeminiVisionService
@@ -24,6 +24,25 @@ from app.services.waste_taxonomy import MATERIAL_LABELS, SUMMARY_LABELS, to_summ
 OUTPUT_DIR = Path(__file__).resolve().parents[2] / "output"
 LOCK_CONFIDENCE = 0.52
 LOCK_STREAK = 2
+CLIP_ALLOWED_ITEMS = [
+    "페트병",
+    "플라스틱 병",
+    "플라스틱 용기",
+    "캔",
+    "알루미늄 캔",
+    "유리병",
+    "종이",
+    "종이컵",
+    "비닐",
+    "스티로폼",
+]
+
+
+def should_use_clip(item_name: str) -> bool:
+    if not item_name:
+        return False
+
+    return item_name.strip() in CLIP_ALLOWED_ITEMS
 
 
 class AnalysisService:
@@ -97,7 +116,20 @@ class AnalysisService:
             ai_source = "local"
 
         if ai_result is not None:
-            result = _merge_gemini_result(result, ai_result)
+            use_clip = should_use_clip(ai_result.waste_type_ko)
+            print("Gemini waste_type:", ai_result.waste_type_ko)
+            print("Gemini material:", ai_result.material)
+            print("Use CLIP:", use_clip)
+            if use_clip:
+                pass
+            else:
+                result = _apply_gemini_result(result, ai_result)
+
+        if chart_b64 is not None:
+            chart_summary = _chart_summary_for_result(result, ai_result)
+            if chart_path is not None:
+                save_donut_chart(chart_summary, Path(chart_path))
+            chart_b64 = chart_to_base64(chart_summary)
 
         return _to_response(
             result,
@@ -241,24 +273,108 @@ def _draw_simple_boxes(frame: np.ndarray, labeled: List[LabeledDetection]) -> np
 def _merge_gemini_result(
     local: ClassificationResult, gemini: GeminiAnalysisResult
 ) -> ClassificationResult:
-    
-    detail = dict(local.detail)
-    summary = dict(local.summary)
+    return _apply_gemini_result(local, gemini)
 
-    primary = (
-        gemini.material
-        if gemini.material in MATERIAL_LABELS
-        else local.primary_material
+
+def _apply_gemini_result(
+    local: ClassificationResult,
+    gemini: GeminiAnalysisResult,
+) -> ClassificationResult:
+
+    primary = gemini.material or local.primary_material
+    detail = _detail_from_materials(gemini)
+    summary = to_summary(detail)
+    confidence = max(
+        local.confidence,
+        (gemini.materials[0].percentage / 100.0) if gemini.materials else 0.75,
     )
-   
+
     return ClassificationResult(
         summary=summary,
         detail=detail,
         primary_material=primary,
-        confidence=max(local.confidence, 0.75),
+        confidence=round(confidence, 4),
         waste_type_id="gemini",
         waste_type_ko=gemini.waste_type_ko,
     )
+
+
+def _detail_from_materials(gemini: GeminiAnalysisResult) -> Dict[str, float]:
+    detail = {label: 0.0 for label in MATERIAL_LABELS}
+
+    components = gemini.materials or []
+    if not components:
+        material = _internal_material_name(gemini.material)
+        detail[material] = 100.0
+        return detail
+
+    for component in components[:3]:
+        material = _internal_material_name(component.name)
+        detail[material] += component.percentage
+
+    total = sum(detail.values())
+    if total <= 0:
+        detail["기타"] = 100.0
+        return detail
+
+    for label in detail:
+        detail[label] = round(detail[label] / total * 100.0, 1)
+    primary = max(detail, key=lambda label: detail[label])
+    detail[primary] = round(100.0 - sum(
+        percent for label, percent in detail.items() if label != primary
+    ), 1)
+    return detail
+
+
+def _internal_material_name(material: str) -> str:
+    if material in MATERIAL_LABELS:
+        return material
+    if material == "비닐":
+        return "플라스틱"
+    return "기타"
+
+
+def _chart_summary_for_result(
+    result: ClassificationResult,
+    gemini: Optional[GeminiAnalysisResult],
+) -> Dict[str, float]:
+    if gemini and gemini.materials and not should_use_clip(gemini.waste_type_ko):
+        return {
+            component.name: component.percentage
+            for component in gemini.materials[:3]
+        }
+    return result.summary
+
+
+def _materials_for_response(
+    result: ClassificationResult,
+    gemini: Optional[GeminiAnalysisResult],
+) -> List[MaterialComponent]:
+    if gemini and gemini.materials and not should_use_clip(gemini.waste_type_ko):
+        return gemini.materials[:3]
+    return _materials_from_detail(result.detail)
+
+
+def _materials_from_detail(detail: Dict[str, float]) -> List[MaterialComponent]:
+    pairs = [
+        (name, percent)
+        for name, percent in detail.items()
+        if percent > 0.1
+    ]
+    pairs.sort(key=lambda item: item[1], reverse=True)
+    pairs = pairs[:3] or [("기타", 100.0)]
+
+    total = sum(percent for _, percent in pairs) or 1.0
+    materials: List[MaterialComponent] = []
+    remaining = 100.0
+    for idx, (name, percent) in enumerate(pairs):
+        if idx == len(pairs) - 1:
+            value = round(remaining, 1)
+        else:
+            value = round(percent / total * 100.0, 1)
+            remaining = round(remaining - value, 1)
+        materials.append(MaterialComponent(name=name, percentage=max(value, 0.0)))
+    return materials
 
 
 def _to_response(
@@ -319,6 +435,7 @@ def _to_response(
         ai_enabled=ai_on,
         ai_source=ai_source,
         ai_summary=gemini_result.summary if gemini_result else None,
+        materials=_materials_for_response(result, gemini_result),
         contamination=gemini_result.contamination if gemini_result else None,
         recyclable=gemini_result.recyclable if gemini_result else None,
         disposal_steps=gemini_result.disposal_steps if gemini_result else [],

@@ -32,9 +32,21 @@ class RecyclableInfo(BaseModel):
     reason: str = Field(..., description="판단 근거")
 
 
+class MaterialComponent(BaseModel):
+    """Gemini가 추정한 복합 재질 구성."""
+
+    name: str = Field(..., description="재질명")
+    percentage: float = Field(..., ge=0, le=100, description="재질 비율")
+
+
 class GeminiAnalysisResult(BaseModel):
     waste_type_ko: str
     material: str
+    materials: List[MaterialComponent] = Field(
+        default_factory=list,
+        max_length=3,
+        description="대표 재질 순서의 복합 재질 구성",
+    )
     contamination: ContaminationInfo
     recyclable: RecyclableInfo
     disposal_steps: List[str] = Field(

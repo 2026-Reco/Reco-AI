@@ -10,6 +10,7 @@ import numpy as np
 from app.schemas.gemini_analysis import (
     ContaminationInfo,
     GeminiAnalysisResult,
+    MaterialComponent,
     RecyclableInfo,
 )
 
@@ -203,6 +204,12 @@ def build_local_analysis(
     return GeminiAnalysisResult(
         waste_type_ko=waste_type_ko or "미확인",
         material=mat if mat in ("플라스틱", "유리", "종이", "금속", "기타") else material,
+        materials=[
+            MaterialComponent(
+                name=mat if mat in ("플라스틱", "유리", "종이", "금속", "기타") else "기타",
+                percentage=100.0,
+            )
+        ],
         contamination=ContaminationInfo(level=level, score=round(score, 1), detail=detail),
         recyclable=RecyclableInfo(possible=possible, label=label, reason=reason),
         disposal_steps=list(rule.get("steps", [])),

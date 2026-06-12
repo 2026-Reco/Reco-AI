@@ -24,11 +24,28 @@ plt.rcParams["axes.unicode_minus"] = False
 CHART_COLORS = {
     "플라스틱": "#5CB85C",
     "유리": "#2E6B4E",
-    "금속": "#2E6B4E",
+    "금속": "#4A90D9",
+    "종이": "#C4A574",
+    "비닐": "#7BC8A4",
+    "전자부품": "#8E6AD8",
+    "고무": "#444444",
+    "섬유": "#D98282",
+    "목재": "#A06A3B",
     "기타": "#D9D9D9",
 }
 
-CHART_ORDER = ("플라스틱", "유리", "금속", "기타")
+CHART_ORDER = (
+    "플라스틱",
+    "유리",
+    "금속",
+    "종이",
+    "비닐",
+    "전자부품",
+    "고무",
+    "섬유",
+    "목재",
+    "기타",
+)
 
 
 def render_donut_chart(
@@ -39,13 +56,16 @@ def render_donut_chart(
     sizes: List[float] = []
     colors: List[str] = []
 
-    for name in CHART_ORDER:
+    ordered_names = [name for name in CHART_ORDER if name in summary]
+    ordered_names.extend(name for name in summary if name not in ordered_names)
+
+    for name in ordered_names:
         v = max(summary.get(name, 0.0), 0.0)
         if v <= 0.1:
             continue
         labels.append(f"{name}\n{v:.0f}%")
         sizes.append(v)
-        colors.append(CHART_COLORS[name])
+        colors.append(CHART_COLORS.get(name, CHART_COLORS["기타"]))
 
     if not sizes:
         sizes, labels, colors = [100.0], ["기타\n100%"], [CHART_COLORS["기타"]]

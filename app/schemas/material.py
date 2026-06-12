@@ -4,7 +4,11 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from app.schemas.gemini_analysis import ContaminationInfo, RecyclableInfo
+from app.schemas.gemini_analysis import (
+    ContaminationInfo,
+    MaterialComponent,
+    RecyclableInfo,
+)
 
 
 class MaterialRatio(BaseModel):
@@ -64,6 +68,11 @@ class MaterialAnalyzeResponse(BaseModel):
         default=None, description="gemini | local"
     )
     ai_summary: Optional[str] = Field(default=None, description="AI 한 줄 요약")
+    materials: List[MaterialComponent] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Gemini가 추정한 복합 재질 구성",
+    )
     contamination: Optional[ContaminationInfo] = Field(
         default=None, description="오염도 분석"
     )
@@ -85,5 +94,5 @@ class MessageResponse(BaseModel):
 
 class ReanalyzeRequest(BaseModel):
     previous_result: dict
-    additional_answers: list
-    question_type: str
+    additional_answers: list = Field(default_factory=list)
+    question_type: str = "general_reanalysis"

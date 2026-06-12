@@ -6,9 +6,25 @@ const COLORS = {
   유리: "#2E6B4E",
   금속: "#4A90D9",
   종이: "#C4A574",
+  비닐: "#7BC8A4",
+  전자부품: "#8E6AD8",
+  고무: "#444444",
+  섬유: "#D98282",
+  목재: "#A06A3B",
   기타: "#AAAAAA",
 };
-const CHART_ORDER = ["플라스틱", "유리", "금속", "기타"];
+const CHART_ORDER = [
+  "플라스틱",
+  "유리",
+  "금속",
+  "종이",
+  "비닐",
+  "전자부품",
+  "고무",
+  "섬유",
+  "목재",
+  "기타",
+];
 
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
@@ -116,6 +132,18 @@ function summaryMap(summary) {
     m[s.label] = s.percent;
   });
   return m;
+}
+
+function materialsMap(materials, fallbackSummary) {
+  if (Array.isArray(materials) && materials.length) {
+    const m = {};
+    materials.forEach((item) => {
+      if (!item || !item.name) return;
+      m[item.name] = Number(item.percentage) || 0;
+    });
+    return m;
+  }
+  return summaryMap(fallbackSummary);
 }
 
 function materialColor(material) {
@@ -332,10 +360,10 @@ async function analyzeFrame() {
     lastDetections = body.detections || [];
     lastLocked = !!body.locked;
 
-    drawDonut(summaryMap(body.summary));
+    drawDonut(materialsMap(body.materials, body.summary));
 
     const waste = body.waste_type_ko || "미확인";
-    const mat = body.primary_material;
+    const mat = body.materials?.[0]?.name || body.primary_material;
     primaryLabel.textContent = `${waste} (${mat} ${Math.round(body.confidence * 100)}%)`;
 
     updateAiPanel(body);
