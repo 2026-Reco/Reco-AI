@@ -16,6 +16,7 @@ from app.schemas.material import (
 from app.schemas.gemini_analysis import GeminiAnalysisResult, MaterialComponent
 from app.services.chart_generator import chart_to_base64, save_donut_chart
 from app.services.detection_analysis import DetectionAnalysisService, LabeledDetection
+from app.services.disposal_steps import format_disposal_steps, summarize_disposal_steps
 from app.services.gemini_vision import GeminiVisionService
 from app.services.local_recycling_guide import build_local_analysis
 from app.services.waste_classifier import ClassificationResult, WasteClassifier
@@ -36,6 +37,8 @@ CLIP_ALLOWED_ITEMS = [
     "비닐",
     "스티로폼",
 ]
+UNKNOWN_ITEM_NAME = "알 수 없는 품목"
+MATERIAL_ITEM_NAMES = {"플라스틱", "유리", "금속", "종이", "비닐", "스티로폼", "전자부품", "고무", "섬유", "목재", "기타", "미확인", ""}
 
 
 def should_use_clip(item_name: str) -> bool:
@@ -116,14 +119,9 @@ class AnalysisService:
             ai_source = "local"
 
         if ai_result is not None:
-            use_clip = should_use_clip(ai_result.waste_type_ko)
             print("Gemini waste_type:", ai_result.waste_type_ko)
             print("Gemini material:", ai_result.material)
-            print("Use CLIP:", use_clip)
-            if use_clip:
-                pass
-            else:
-                result = _apply_gemini_result(result, ai_result)
+            result = _apply_gemini_result(result, ai_result)
 
         if chart_b64 is not None:
             chart_summary = _chart_summary_for_result(result, ai_result)
@@ -284,6 +282,7 @@ def _apply_gemini_result(
     primary = gemini.material or local.primary_material
     detail = _detail_from_materials(gemini)
     summary = to_summary(detail)
+    item_name = _resolve_item_name(local, gemini)
     confidence = max(
         local.confidence,
         (gemini.materials[0].percentage / 100.0) if gemini.materials else 0.75,
@@ -295,8 +294,61 @@ def _apply_gemini_result(
         primary_material=primary,
         confidence=round(confidence, 4),
         waste_type_id="gemini",
-        waste_type_ko=gemini.waste_type_ko,
+        waste_type_ko=item_name,
     )
+
+
+def _resolve_item_name(
+    local: ClassificationResult,
+    gemini: GeminiAnalysisResult,
+) -> str:
+    gemini_item = _valid_item_name(gemini.item_name or gemini.waste_type_ko)
+    local_item = _valid_item_name(local.waste_type_ko)
+    steps_text = _steps_text(gemini.disposal_steps)
+
+    if (
+        (gemini_item == "비닐봉투" or local_item == "비닐봉투")
+        and _steps_indicate_pet_bottle(steps_text)
+    ):
+        return "페트병"
+
+    if not gemini_item:
+        return local_item or UNKNOWN_ITEM_NAME
+
+    if (
+        gemini_item == "비닐봉투"
+        and not _steps_indicate_plastic_bag(steps_text)
+        and local_item
+        and local_item != "비닐봉투"
+    ):
+        return local_item
+
+    return gemini_item
+
+
+def _valid_item_name(value: str) -> str:
+    item_name = (value or "").strip()
+    if item_name in MATERIAL_ITEM_NAMES:
+        return ""
+    return item_name
+
+
+def _steps_text(steps: List[str]) -> str:
+    return " ".join(str(step) for step in (steps or []))
+
+
+def _steps_indicate_pet_bottle(steps_text: str) -> bool:
+    if not steps_text:
+        return False
+    signals = ("병", "뚜껑", "라벨", "찌그러")
+    return any(signal in steps_text for signal in signals)
+
+
+def _steps_indicate_plastic_bag(steps_text: str) -> bool:
+    if not steps_text:
+        return False
+    signals = ("봉투", "비닐류", "물기", "깨끗한 비닐", "이물질")
+    return any(signal in steps_text for signal in signals)
 
 
 def _detail_from_materials(gemini: GeminiAnalysisResult) -> Dict[str, float]:
@@ -351,7 +403,9 @@ def _materials_for_response(
     gemini: Optional[GeminiAnalysisResult],
 ) -> List[MaterialComponent]:
     if gemini and gemini.materials and not should_use_clip(gemini.waste_type_ko):
-        return gemini.materials[:3]
+        materials = gemini.materials[:3]
+        if materials and materials[0].name == result.primary_material:
+            return materials
     return _materials_from_detail(result.detail)
 
 
@@ -377,6 +431,50 @@ def _materials_from_detail(detail: Dict[str, float]) -> List[MaterialComponent]:
     return materials
 
 
+def normalize_analysis_result(
+    result: ClassificationResult,
+    gemini: Optional[GeminiAnalysisResult],
+) -> ClassificationResult:
+    if gemini is None:
+        item_name = _valid_item_name(result.waste_type_ko) or UNKNOWN_ITEM_NAME
+        return ClassificationResult(
+            summary=result.summary,
+            detail=result.detail,
+            primary_material=result.primary_material,
+            confidence=result.confidence,
+            waste_type_id=result.waste_type_id,
+            waste_type_ko=item_name,
+        )
+
+    gemini_item = _valid_item_name(gemini.item_name) or _valid_item_name(gemini.waste_type_ko)
+    result_item = _valid_item_name(result.waste_type_ko)
+    item_name = gemini_item or result_item or UNKNOWN_ITEM_NAME
+    steps_text = _steps_text(gemini.disposal_steps)
+
+    if item_name == "비닐봉투" and _steps_indicate_pet_bottle(steps_text):
+        item_name = "페트병"
+    elif (
+        item_name == "비닐봉투"
+        and not _steps_indicate_plastic_bag(steps_text)
+        and result_item
+        and result_item != "비닐봉투"
+    ):
+        item_name = result_item
+
+    primary_material = gemini.material or result.primary_material
+    if primary_material not in MATERIAL_LABELS:
+        primary_material = result.primary_material
+
+    return ClassificationResult(
+        summary=result.summary,
+        detail=result.detail,
+        primary_material=primary_material,
+        confidence=result.confidence,
+        waste_type_id=result.waste_type_id,
+        waste_type_ko=item_name,
+    )
+
+
 def _to_response(
     result: ClassificationResult,
     session_id: str,
@@ -390,6 +488,7 @@ def _to_response(
     gemini_error: Optional[str] = None,
     ai_source: Optional[str] = None,
 ) -> MaterialAnalyzeResponse:
+    result = normalize_analysis_result(result, gemini_result)
     if labeled is None:
         labeled = []
     summary = [
@@ -415,6 +514,14 @@ def _to_response(
 
     ai_on = gemini_result is not None
     warnings = list(gemini_result.warnings if gemini_result else [])
+    materials = _materials_for_response(result, gemini_result)
+    material_probabilities = materials
+    disposal_steps = format_disposal_steps(
+        result.waste_type_ko,
+        result.primary_material,
+        gemini_result.disposal_steps if gemini_result else [],
+    )
+    ai_summary = summarize_disposal_steps(result.waste_type_ko, result.primary_material)
     if ai_source == "local" and gemini_error == "quota":
         warnings = [
             "Gemini API 할당량 초과 — 로컬 AI(규칙·화면 분석)로 안내합니다.",
@@ -423,8 +530,14 @@ def _to_response(
     return MaterialAnalyzeResponse(
         summary=summary,
         detail=detail,
+        item_name=result.waste_type_ko or UNKNOWN_ITEM_NAME,
         primary_material=result.primary_material,
+        material=result.primary_material,
         waste_type_ko=result.waste_type_ko,
+        materialProbabilities=[
+            MaterialRatio(label=item.name, percent=item.percentage)
+            for item in material_probabilities
+        ],
         confidence=result.confidence,
         session_id=session_id,
         detections=detections,
@@ -434,11 +547,11 @@ def _to_response(
         chart_image_base64=chart_base64,
         ai_enabled=ai_on,
         ai_source=ai_source,
-        ai_summary=gemini_result.summary if gemini_result else None,
-        materials=_materials_for_response(result, gemini_result),
+        ai_summary=ai_summary if ai_on else None,
+        materials=materials,
         contamination=gemini_result.contamination if gemini_result else None,
         recyclable=gemini_result.recyclable if gemini_result else None,
-        disposal_steps=gemini_result.disposal_steps if gemini_result else [],
+        disposal_steps=disposal_steps if ai_on else [],
         warnings=warnings,
         ai_error=None,
     )

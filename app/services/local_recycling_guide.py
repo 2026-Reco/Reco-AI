@@ -13,6 +13,10 @@ from app.schemas.gemini_analysis import (
     MaterialComponent,
     RecyclableInfo,
 )
+from app.services.disposal_steps import format_disposal_steps, summarize_disposal_steps
+
+UNKNOWN_ITEM_NAME = "알 수 없는 품목"
+MATERIAL_NAMES = {"플라스틱", "유리", "금속", "종이", "비닐", "스티로폼", "전자부품", "고무", "섬유", "목재", "기타"}
 
 # waste_type_ko 또는 material 키로 조회
 _RULES: Dict[str, Dict[str, Any]] = {
@@ -186,6 +190,7 @@ def build_local_analysis(
     material: str,
     frame: Optional[np.ndarray] = None,
 ) -> GeminiAnalysisResult:
+    item_name = _normalize_item_name(waste_type_ko)
     rule = _match_rule(waste_type_ko, material)
     mat = rule.get("material", material)
 
@@ -199,10 +204,12 @@ def build_local_analysis(
         label = "조건부 가능"
         reason = "오염이 심하면 재활용이 불가합니다. 세척 후 재활용 가능 여부를 판단하세요."
 
-    summary = f"{waste_type_ko} — {label}. {detail[:40]}…" if len(detail) > 40 else f"{waste_type_ko} — {label}. {detail}"
+    steps = format_disposal_steps(item_name, mat, rule.get("steps", []))
+    summary = summarize_disposal_steps(item_name, mat)
 
     return GeminiAnalysisResult(
-        waste_type_ko=waste_type_ko or "미확인",
+        item_name=item_name,
+        waste_type_ko=item_name,
         material=mat if mat in ("플라스틱", "유리", "종이", "금속", "기타") else material,
         materials=[
             MaterialComponent(
@@ -212,7 +219,14 @@ def build_local_analysis(
         ],
         contamination=ContaminationInfo(level=level, score=round(score, 1), detail=detail),
         recyclable=RecyclableInfo(possible=possible, label=label, reason=reason),
-        disposal_steps=list(rule.get("steps", [])),
+        disposal_steps=steps,
         warnings=list(rule.get("warnings", [])),
         summary=summary,
     )
+
+
+def _normalize_item_name(value: str) -> str:
+    item_name = (value or "").strip()
+    if not item_name or item_name in MATERIAL_NAMES or item_name == "미확인":
+        return UNKNOWN_ITEM_NAME
+    return item_name

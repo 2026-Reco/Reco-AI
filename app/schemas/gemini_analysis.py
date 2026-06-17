@@ -40,6 +40,7 @@ class MaterialComponent(BaseModel):
 
 
 class GeminiAnalysisResult(BaseModel):
+    item_name: str = Field(default="알 수 없는 품목", description="이미지 속 실제 품목명")
     waste_type_ko: str
     material: str
     materials: List[MaterialComponent] = Field(

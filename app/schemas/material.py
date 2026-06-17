@@ -39,8 +39,14 @@ class MaterialAnalyzeResponse(BaseModel):
     detail: List[MaterialRatio] = Field(
         description="플라스틱·유리·종이·금속·기타"
     )
+    item_name: str = Field(default="알 수 없는 품목", description="이미지 속 실제 품목명")
     primary_material: str = Field(..., examples=["플라스틱"])
+    material: str = Field(..., examples=["플라스틱"], description="대표 주 재질")
     waste_type_ko: str = Field(default="미확인", description="주요 쓰레기 종류 (예: 알루미늄 캔)")
+    materialProbabilities: List[MaterialRatio] = Field(
+        default_factory=list,
+        description="대표 재질과 일치하도록 보정된 재질 확률",
+    )
     confidence: float = Field(..., ge=0, le=1, description="주요 재질 신뢰도(0~1)")
     session_id: Optional[str] = Field(
         default=None, description="연속 프레임 평활화에 사용한 세션 ID"
